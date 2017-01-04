@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8">
+        <title>D3 Page Template</title>
+        <style>
+            body {
+                text-align:center;
+            }
+
+            .title {
+                font-family: sans-serif;
+                width: 50%;
+                margin-left: 25%;
+                margin-top: 3%;
+            }
+
+            div.bar {
+                display: inline-block;
+                width: 23px;
+                height: 75px;
+                background-color: teal;
+                margin-right: 2px;
+            }
+
+            .circle:hover {
+                stroke: black;
+                stroke-width: 1px;
+            }
+
+            .axis path,
+            .axis line {
+                stroke: gray;
+                fill: none;
+                shape-rendering: crispEdges;
+            }
+            .axis text {
+                font-family: sans-serif;
+                font-size: 14px;
+            }
+
+            .linechart {
+                fill: none;
+                stroke: black;
+                stroke-width: 4;
+            }
+
+            .linechart:hover {
+                stroke-width: 8;
+            }
+
+            .chart_title {
+                font-family: sans-serif;
+                font-size: 20px;
+                text-anchor: middle;
+            }
+
+            .chart_labels {
+                font-family: sans-serif;
+                font-size: 16px;
+            }
+
+            .legend_text {
+                font-family: sans-serif;
+                font-size: 14px;
+            }
+
+            .paragraph {
+                font-family: sans-serif;
+                text-align: left;
+                width: 40%;
+                transform: translateX(75%);
+            }
+        </style>
+        <script type="text/javascript" src="d3/d3.js"></script>
+        <script type="text/javascript" src="chart_utils.js"></script>
+    </head>
+    <body>
+        <h1 class="title">Heart rate and oxygen level visualizations</h1>
+        <div class="paragraph">
+            <p>This data was captured from a finger sensor that records
+                a person's pulse and oxygen level. <br><br> The first chart
+                records these measurements for a few different activities.
+                <br><br>The second set of charts records a few trials where
+                I breathed deeply for 30 seconds (<i>prep</i>) and then held
+                my breath for 150 seconds.<br><br>Hover over the dots and
+                lines to view a hover animation. The scatterplot is a giant
+                button, click it to view the average values of each activity.</p>
+        </div>
+        <script type="text/javascript">
+        // Scatterplot of Oxygen and Pulse readings
+        var dataset;
+
+        d3.csv("Raw data.csv", function(error, scatter_data) {
+            if (error){
+                console.log(error);};
+
+            var activity_nice_labels = {
+                "Sitting": "Sitting",
+                "Deep breathing for 30 seconds": "Deep breathing",
+                "Standing": "Standing",
+                "30 jumping jacks": "Jumping jacks"};
+
+            var activity_list = [];
+            for (val in activity_nice_labels) activity_list.push(val);
+
+            // Calculate averages of pulse and oxygen readings.
+            var pulse_averages = {};
+            var oxygen_averages = {};
+
+            for (measure of ["Pulse", "Oxygen"]) {
+                for (activity of activity_list) {
+                    var group_average = function(d) {
+                        if (d.Activity === activity) {
+                            return +d[measure];}};
+                    var activity_average = d3.mean(scatter_data, group_average);
+                    if (measure === "Pulse") {
+                        pulse_averages[activity] = activity_average;}
+                    else {
+                        oxygen_averages[activity] = activity_average;};};};
+
+
+            d3.mean(scatter_data, function(d){if (d.Activity === "Sitting") return d.Pulse;});
+
+            var height = 300,
+                width = height,
+                top_margin = height*.15,
+                bottom_margin = height*.15,
+                right_margin = width*.05,
+                left_margin = width*.17;
+
+            var pulse_extent = d3.extent(scatter_data, function(d){
+                    return +d.Pulse;});
+
+            var oxygen_extent = d3.extent(scatter_data, function(d){
+                    return +d.Oxygen;});
+
+            var pulse_scale = d3.scaleLinear()
+                            .domain(pulse_extent)
+                            .range([height, 0])
+                            .nice();
+
+            var oxygen_scale = d3.scaleLinear()
+                            .domain(oxygen_extent)
+                            .range([0, width])
+                            .nice();
+
+            var svg = chart_utils.make_svg(height,
+                               width,
+                               top_margin,
+                               bottom_margin,
+                               right_margin,
+                               left_margin);
+
+            var radius = height*.025;
+
+            var scatter = svg.selectAll("circle")
+                    .data(scatter_data)
+                    .enter()
+                    .append("circle")
+                    .attr("class", "circle")
+                    .attr("cx", function(d){
+                        var o2 = d.Oxygen;
+                        var scaled_o2 = oxygen_scale(o2);
+                        return scaled_o2;})
+                    .attr("cy", function(d){
+                        var p = d.Pulse;
+                        var scaled_p = pulse_scale(p);
+                        return scaled_p;})
+                    .attr("r", radius)
+                    .attr("fill", function(d){
+                        var activity = d.Activity;
+                        var color = chart_utils.activity_colors[activity];
+                        return color;});
+
+            var circle_average = 0;
+
+            d3.select("svg")
+                    .on("click", function() {
+                        if (circle_average) {
+                            circle_average = 0;
+                            svg.selectAll("circle")
+                                    .data(scatter_data)
+                                    .transition()
+                                    .duration(1000)
+                                    .attr("cx", function(d){
+                                        var o2 = d.Oxygen;
+                                        var scaled_o2 = oxygen_scale(o2);
+                                        return scaled_o2;})
+                                    .attr("cy", function(d){
+                                        var p = d.Pulse;
+                                        var scaled_p = pulse_scale(p);
+                                        return scaled_p;})
+                                    .attr("r", radius);
+                        } else {
+                        circle_average = 1;
+                        svg.selectAll("circle")
+                                .data(scatter_data)
+                                .transition()
+                                .duration(1000)
+                                .attr("cx", function(d){
+                                    var activity = d.Activity;
+                                    var activity_average = oxygen_averages[activity];
+                                    var scaled_o2 = oxygen_scale(activity_average);
+                                    return scaled_o2;
+                                })
+                                .attr("cy", function(d){
+                                    var activity = d.Activity;
+                                    var activity_average = pulse_averages[activity];
+                                    var scaled_pulse = pulse_scale(activity_average);
+                                    return scaled_pulse;
+                                })
+                                .attr("r", radius*2);}
+                            });
+
+            // x-axis
+            x_translate = "translate(0, " + height + ")";
+
+            svg.append("g")
+                .attr("class", "axis")
+                .attr("transform", x_translate)
+                .call(d3.axisBottom(oxygen_scale)
+                        .ticks(5));
+
+            // y-axis
+            svg.append("g")
+                .attr("class", "axis")
+                .call(d3.axisLeft(pulse_scale));
+
+            // title
+            svg.append("text")
+                .text("Sensor readings by activity")
+                .attr("x", width/2)
+                .attr("y", -height*.05)
+                .attr("class", "chart_title");
+
+            // x-label
+            svg.append("text")
+                .text("Oxygen %")
+                .attr("class", "chart_labels")
+                .attr("text-anchor", "middle")
+                .attr("alignment-baseline", "text-after-edge")
+                .attr("x", width/2)
+                .attr("y", height + bottom_margin);
+
+            // y-label
+            chart_utils.make_y_labels(svg, "Pulse", left_margin, height);
+
+            // Legend
+            var width = height/2,
+                top_margin = height*.15,
+                bottom_margin = height*.17,
+                right_margin = width*.05,
+                left_margin = width*.1;
+
+            var svg_legend = chart_utils.make_svg(height,
+                                      width,
+                                      top_margin,
+                                      bottom_margin,
+                                      right_margin,
+                                      left_margin);
+
+            var legend_label_spacing = .07;
+
+            svg_legend.selectAll("circle")
+                .data(activity_list)
+                .enter()
+                .append("circle")
+                .attr("cx", 0)
+                .attr("cy", function(d, i){
+                    return i*height*legend_label_spacing;})
+                .attr("r", radius)
+                .attr("fill", function(d){
+                    return chart_utils.activity_colors[d];});
+
+            svg_legend.selectAll("text")
+                .data(activity_list)
+                .enter()
+                .append("text")
+                .text(function(d){
+                    return activity_nice_labels[d];
+                })
+                .attr("class", "legend_text")
+                .attr("y", function(d, i){
+                    return i*height*legend_label_spacing;})
+                .attr("x", width*.08)
+                .attr("alignment-baseline", "central");
+
+        d3.select("body").append("div")
+                .style("height", "80px");
+
+        d3.csv("Breathing raw data.csv", function(error, data){
+            if (error){
+                console.log(error);};
+
+            dataset = data;
+
+            // Chart dimensions
+            var height = 155;
+
+            // Pulse
+            var pulse_vars = ["T1Pu", "T2Pu", "T3Pu", "T4Pu"];
+
+            var scale_pulse = d3.scaleLinear()
+                    .domain([125, 60])
+                    .range([0, height]);
+
+            var pulse_svg = chart_utils.make_line_chart(data,
+                    height=height,
+                    var_list=pulse_vars,
+                    scale_y=scale_pulse,
+                    title="Change in pulse",
+                    y_label="Pulse",
+                    line_color="rgba(255,69,33,.75)");
+
+            d3.select("body").append("div")
+                    .style("height", "50px");
+
+
+            // Oxygen
+            var o2_vars = ["T1O2", "T2O2", "T3O2", "T4O2"];
+
+            var scale_oxygen = d3.scaleLinear()
+                    .domain([100, 65])
+                    .range([0, height]);
+
+            var oxygen_svg = chart_utils.make_line_chart(data,
+                    height=height,
+                    var_list=o2_vars,
+                    scale_y=scale_oxygen,
+                    title="Change in oxygen",
+                    y_label="Oxygen",
+                    line_color="rgba(33,69,255,.75)");
+
+            d3.select("body").append("div")
+                    .style("height", "100px");
+        });
+        }); // Close scatter plot csv
+        </script>
+    </body>
+</html>
